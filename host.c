@@ -63,12 +63,10 @@ int challenge_device(RSA *rsa, int sock) {
   struct timeval timeout;
   timeout.tv_sec = INTERVAL;
   timeout.tv_usec = 0;
-  printf("SELECTING\n");
   int select_result = select(sock + 1, &set, NULL, NULL, &timeout);
   int error = 0;
   socklen_t len = sizeof(error);
   getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &len);
-  printf("%d\n", error);
   if(select_result <= 0 || error) {
     close(sock);
     printf("Timed out\n");
@@ -100,6 +98,7 @@ int connect_to_device(RSA *rsa, bdaddr_t current_address) {
 
 void lock_computer() {
   printf("Computer locked\n");
+  system("physlock");
 }
 
 void start_client(RSA *rsa, int sock) {
@@ -127,30 +126,32 @@ int main() {
   int max_rsp = 255;
   int len = 8;
   int name_length = 248;
-  inquiry_info *inquiry_response = malloc(max_rsp * sizeof(inquiry_info));
-  int num_rsp = hci_inquiry(dev_id, len, max_rsp, NULL, &inquiry_response, IREQ_CACHE_FLUSH);
-  if (num_rsp < 0) {
-    fprintf(stderr, "Bluetooth Not Turned On\n");
-    exit(0);
-  }
-  char *addr = malloc(19);
-  char *name = malloc(name_length);
-  for (int i = 0; i < num_rsp; i++) {
-    bdaddr_t *current_address = &(inquiry_response + i)->bdaddr;
-    if (!is_valid_address(*current_address)) {
-      continue;
+  while (1) {
+    inquiry_info *inquiry_response = malloc(max_rsp * sizeof(inquiry_info));
+    int num_rsp = hci_inquiry(dev_id, len, max_rsp, NULL, &inquiry_response, IREQ_CACHE_FLUSH);
+    if (num_rsp < 0) {
+      fprintf(stderr, "Bluetooth Not Turned On\n");
+      exit(0);
     }
-    ba2str(current_address, addr);
-    memset(name, 0, (long unsigned int) name_length);
-    hci_read_remote_name(sock, current_address, name_length, name, 0);
-    if (!memcmp(name, target_name, strlen(target_name))) {
-      printf("Device Found: Challenging It\n");
-        int sock = connect_to_device(rsa, *current_address);
-        if (sock >= 0) {
-          start_client(rsa, sock);
-          return 0;
-        }
+    char *addr = malloc(19);
+    char *name = malloc(name_length);
+    for (int i = 0; i < num_rsp; i++) {
+      bdaddr_t *current_address = &(inquiry_response + i)->bdaddr;
+      if (!is_valid_address(*current_address)) {
+        continue;
+      }
+      ba2str(current_address, addr);
+      memset(name, 0, (long unsigned int) name_length);
+      hci_read_remote_name(sock, current_address, name_length, name, 0);
+      printf("%s:  '%s'\n", addr, name);
+      if (!memcmp(name, target_name, strlen(target_name))) {
+        printf("Device Found: Challenging It\n");
+          int sock = connect_to_device(rsa, *current_address);
+          if (sock >= 0) {
+            start_client(rsa, sock);
+            return 0;
+          }
+      }
     }
-    printf("%s:  '%s'\n", addr, name);
   }
 }

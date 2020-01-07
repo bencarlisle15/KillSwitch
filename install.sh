@@ -1,1 +1,1 @@
-sudo apt-get install libbluetooth-dev libssl-dev
+sudo apt-get install libbluetooth-dev libssl-dev physlock
